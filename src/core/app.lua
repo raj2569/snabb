@@ -10,12 +10,12 @@ local timer     = require("core.timer")
 local shm       = require("core.shm")
 local histogram = require('core.histogram')
 local counter   = require("core.counter")
-local zone      = require("jit.zone")
 local jit       = require("jit")
 local ffi       = require("ffi")
 local C         = ffi.C
 local timeline_mod = require("core.timeline") -- avoid collision with timeline()
-
+local S         = require("syscall")
+local vmprofile = require("jit.vmprofile")
 require("core.packet_h")
 
 -- Packet per pull
@@ -77,6 +77,28 @@ maxsleep = 100
 -- loop (100% CPU) instead of sleeping according to the Hz setting.
 busywait = false
 
+-- Profiling with vmprofile --------------------------------
+
+-- FFI interface towards vmprofile
+ffi.cdef[[
+int vmprofile_get_profile_size();
+void vmprofile_set_profile(void *counters);
+]]
+
+local vmprofile_t = ffi.new("uint8_t["..C.vmprofile_get_profile_size().."]")
+
+local vmprofiles = {}
+local function getvmprofile (name)
+   if vmprofiles[name] == nil then
+      vmprofiles[name] = shm.create("engine/vmprofile/"..name, vmprofile_t)
+   end
+   return vmprofiles[name]
+end
+
+local function setvmprofile (name)
+   C.vmprofile_set_profile(getvmprofile(name))
+end
+
 -- True when the engine is running the breathe loop.
 local running = false
 
@@ -92,6 +114,7 @@ end
 -- error app will be marked as dead and restarted eventually.
 function with_restart (app, method)
    local status, result
+   setvmprofile(app.zone)
    if use_restart then
       -- Run fn in protected mode using pcall.
       status, result = pcall(method, app)
@@ -104,6 +127,7 @@ function with_restart (app, method)
    else
       status, result = true, method(app)
    end
+   setvmprofile('engine')
    return status, result
 end
 
@@ -195,8 +219,8 @@ function apply_config_actions (actions, conf)
          error(("bad return value from app '%s' start() method: %s"):format(
                   name, tostring(app)))
       end
-      local zone = app.zone or getfenv(class.new)._NAME or name
-      app_events[app] = timeline_mod.load_events(timeline(), "core.app", {app=name})
+      local zone = app.zone or (type(class.name) == 'string' and class.name) or getfenv(class.new)._NAME or name
+      app_events[app] = timeline_mod.load_events(timeline(), "core.app", {app=name, class=zone})
       app.appname = name
       app.output = {}
       app.input = {}
@@ -340,6 +364,10 @@ function main (options)
       done = lib.timeout(options.duration)
    end
 
+   -- Setup vmprofile
+   setvmprofile('engine')
+   vmprofile.start()
+
    local breathe = breathe
    if options.measure_latency or options.measure_latency == nil then
       local latency = histogram.create('engine/latency.histogram', 1e-6, 1e0)
@@ -355,6 +383,7 @@ function main (options)
    counter.commit()
    if not options.no_report then report(options.report) end
    events.engine_stopped()
+   vmprofile.stop()
 end
 
 local nextbreath
