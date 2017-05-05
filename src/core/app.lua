@@ -432,7 +432,6 @@ function breathe ()
       local app = breathe_pull_order[i]
       if app.pull and not app.dead then
          if timeline_mod.level(timeline_log) <= 2 then log_links(app.input) end
-         zone(app.zone)
          if timeline_mod.level(timeline_log) <= 3 then
             app_events[app].pull(linkstats(app))
             with_restart(app, app.pull)
@@ -440,7 +439,6 @@ function breathe ()
          else
             with_restart(app, app.pull)
          end
-         zone()
       end
    end
    events.breath_pulled()
@@ -448,7 +446,6 @@ function breathe ()
    for i = 1, #breathe_push_order do
       local app = breathe_push_order[i]
       if app.push and not app.dead then
-         zone(app.zone)
          if timeline_mod.level(timeline_log) <= 2 then log_links(app.output) end
          if timeline_mod.level(timeline_log) <= 3 then
             app_events[app].push(linkstats(app))
@@ -458,7 +455,6 @@ function breathe ()
             with_restart(app, app.push)
          end
          if timeline_mod.level(timeline_log) <= 2 then log_links(app.output) end
-         zone()
       end
    end
    events.breath_pushed()
