@@ -386,10 +386,7 @@ function main (options)
    vmprofile.stop()
 end
 
-local nextbreath
-local lastfrees = 0
-local lastfreebits = 0
-local lastfreebytes = 0
+local lastfrees = ffi.new('uint64_t[1]')
 -- Wait between breaths to keep frequency with Hz.
 function pace_breathing ()
    if Hz then
@@ -403,7 +400,7 @@ function pace_breathing ()
       end
       nextbreath = math.max(nextbreath + 1/Hz, monotonic_now)
    else
-      if lastfrees == counter.read(frees) then
+      if lastfrees[0] == counter.read(frees) then
          sleep = math.min(sleep + 1, maxsleep)
          events.sleep_on_idle(sleep)
          C.usleep(sleep)
@@ -411,7 +408,7 @@ function pace_breathing ()
       else
          sleep = math.floor(sleep/2)
       end
-      lastfrees = counter.read(frees)
+      lastfrees[0] = counter.read(frees)
       lastfreebytes = counter.read(freebytes)
       lastfreebits = counter.read(freebits)
    end
@@ -420,8 +417,8 @@ end
 function breathe ()
    local freed_packets0 = counter.read(frees)
    local freed_bytes0 = counter.read(freebytes)
-   events.breath_start(counter.read(breaths), freed_packets0, freed_bytes0,
-                       counter.read(freebits))
+   events.breath_start(counter.read(breaths),   counter.read(frees),
+                       counter.read(freebytes), counter.read(freebits))
    running = true
    monotonic_now = C.get_monotonic_time()
    -- Restart: restart dead apps
@@ -458,11 +455,8 @@ function breathe ()
       end
    end
    events.breath_pushed()
-   local freed
-   local freed_packets = counter.read(frees) - freed_packets0
-   local freed_bytes = (counter.read(freebytes) - freed_bytes0)
-   local freed_bytes_per_packet = freed_bytes / math.max(tonumber(freed_packets), 1)
-   events.breath_end(counter.read(breaths), freed_packets, freed_bytes_per_packet)
+   events.breath_end(counter.read(breaths),   counter.read(frees),
+                     counter.read(freebytes), counter.read(freebits))
    counter.add(breaths)
    -- Commit counters at a reasonable frequency
    if counter.read(breaths) % 100 == 0 then
