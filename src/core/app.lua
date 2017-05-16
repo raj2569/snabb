@@ -31,7 +31,6 @@ test_skipped_code = 43
 app_table, link_table = {}, {}
 -- Timeline events specific to app and link instances
 app_events  = setmetatable({}, { __mode = 'k' })
-link_events = setmetatable({}, { __mode = 'k' })
 
 configuration = config.new()
 
@@ -261,8 +260,6 @@ function apply_config_actions (actions, conf)
       if not new_app_table[ta] then error("no such app: " .. ta) end
       -- Create or reuse a link and assign/update receiving app index
       local link = link_table[linkspec] or link.new(linkspec)
-      link_events[link] =
-         timeline_mod.load_events(timeline(), "core.link", {linkspec=linkspec})
       -- Add link to apps
       new_app_table[fa].output[fl] = link
       table.insert(new_app_table[fa].output, link)
@@ -428,7 +425,6 @@ function breathe ()
    for i = 1, #breathe_pull_order do
       local app = breathe_pull_order[i]
       if app.pull and not app.dead then
-         if timeline_mod.level(timeline_log) <= 2 then log_links(app.input) end
          if timeline_mod.level(timeline_log) <= 3 then
             app_events[app].pull(linkstats(app))
             with_restart(app, app.pull)
@@ -443,7 +439,6 @@ function breathe ()
    for i = 1, #breathe_push_order do
       local app = breathe_push_order[i]
       if app.push and not app.dead then
-         if timeline_mod.level(timeline_log) <= 2 then log_links(app.output) end
          if timeline_mod.level(timeline_log) <= 3 then
             app_events[app].push(linkstats(app))
             with_restart(app, app.push)
@@ -451,7 +446,6 @@ function breathe ()
          else
             with_restart(app, app.push)
          end
-         if timeline_mod.level(timeline_log) <= 2 then log_links(app.output) end
       end
    end
    events.breath_pushed()
@@ -487,22 +481,6 @@ function linkstats (app)
       dropb = dropb + tonumber(counter.read(app.output[i].stats.txdropbytes))
    end
    return inp, inb, outp, outb, dropp, dropb
-end
-
--- Log packet payload from links.
-function log_links (links)
-   for _, l in ipairs(links) do
-      local p = link.front(l)
-      if p ~= nil then
-         link_events[l].packet_start(p.length)
-         local u64 = ffi.cast("uint64_t*", p.data)
-         for n = 0, p.length/8, 6 do
-            link_events[l].packet_data(u64[n+0],u64[n+1],u64[n+2],
-                                       u64[n+3],u64[n+4],u64[n+5])
-         end
-         link_events[l].packet_end(p.length)
-      end
-   end
 end
 
 function report (options)
