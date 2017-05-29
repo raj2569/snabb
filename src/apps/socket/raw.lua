@@ -59,7 +59,7 @@ function RawSocket:pull ()
 end
 
 function RawSocket:can_receive ()
-   local t, err = S.select({readfds = {self.sock}}, 0)
+   local t, err = S.read({readfds = {self.sock}}, 0)
    while not t and (err.AGAIN or err.INTR) do
       t, err = S.select({readfds = {self.sock}}, 0)
    end
