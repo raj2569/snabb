@@ -101,9 +101,9 @@ function RawSocket:push ()
 end
 
 function RawSocket:can_transmit ()
-   local t, err = S.select({writefds = {self.sock}}, 0)
+   local t, err = S.read({writefds = {self.sock}}, 0)
    while not t and (err.AGAIN or err.INTR) do
-      t, err = S.select({writefds = {self.sock}}, 0)
+      t, err = S.read({writefds = {self.sock}}, 0)
    end
    assert(t, err)
    return t.count == 1
